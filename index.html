@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asset Performance Analytics — The Block</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0e;
+    --bg2: #161616;
+    --bg3: #1e1e1e;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f0;
+    --text2: #888;
+    --text3: #555;
+    --accent: #d4f03c;
+    --accent-dim: rgba(212,240,60,0.12);
+    --red: #ff4d4d;
+    --green: #3cffa0;
+    --amber: #ffb547;
+    --blue: #5b9dff;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+
+  /* LAYOUT */
+  .shell { display: flex; flex-direction: column; height: 100vh; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(212,240,60,0.2); padding: 4px 9px; border-radius: 4px; }
+  .brand-name { font-size: 13px; font-weight: 500; color: var(--text2); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .conn-pill { display: flex; align-items: center; gap: 5px; font-size: 11px; font-family: 'DM Mono', monospace; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border2); color: var(--text2); }
+  .conn-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .conn-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .conn-dot.off { background: var(--red); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 24px; flex-shrink: 0; }
+  .tab { padding: 10px 16px; font-size: 12px; font-weight: 500; letter-spacing: 0.3px; cursor: pointer; background: none; border: none; color: var(--text3); border-bottom: 2px solid transparent; font-family: 'DM Sans', sans-serif; transition: color 0.15s; white-space: nowrap; }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* PANELS */
+  .panels { flex: 1; overflow-y: auto; }
+  .panel { display: none; padding: 24px; max-width: 900px; }
+  .panel.active { display: block; }
+
+  /* FORMS */
+  .slabel { font-size: 10px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+  input, textarea, select {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text);
+    background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius);
+    padding: 9px 12px; width: 100%; transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: rgba(212,240,60,0.4); }
+  select option { background: var(--bg2); }
+
+  /* BUTTONS */
+  .btn { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; padding: 7px 16px; border-radius: var(--radius); border: 1px solid var(--border2); background: none; color: var(--text2); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .btn:hover { border-color: var(--border2); background: var(--bg3); color: var(--text); }
+  .btn-accent { background: var(--accent); color: #0e0e0e; border-color: var(--accent); font-weight: 500; }
+  .btn-accent:hover { background: #c8e034; border-color: #c8e034; color: #0e0e0e; }
+  .btn-sm { padding: 5px 12px; font-size: 11px; }
+
+  /* URL INPUT */
+  .url-wrap { position: relative; margin-bottom: 16px; }
+  .url-wrap input { height: 44px; padding-right: 100px; font-size: 13px; background: var(--bg3); }
+  .url-btn-inline { position: absolute; right: 5px; top: 5px; }
+
+  /* TAG PILLS */
+  .tag-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: opacity 0.12s; user-select: none; font-family: 'DM Mono', monospace; }
+  .tag-pill.off { opacity: 0.3; }
+
+  /* RESULT CARDS */
+  .rcard { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 12px; background: var(--bg2); }
+  .rhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+  .plat { display: flex; align-items: center; gap: 8px; }
+  .pdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .plat-name { font-size: 13px; font-weight: 500; }
+  .rurl { font-size: 11px; color: var(--text3); word-break: break-all; margin-bottom: 10px; font-family: 'DM Mono', monospace; }
+  .rtags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  /* STATUS BADGES */
+  .sbadge { font-size: 10px; padding: 3px 10px; border-radius: 99px; font-weight: 500; font-family: 'DM Mono', monospace; letter-spacing: 0.3px; }
+  .s-load { background: rgba(91,157,255,0.15); color: var(--blue); border: 1px solid rgba(91,157,255,0.2); }
+  .s-ok { background: rgba(60,255,160,0.1); color: var(--green); border: 1px solid rgba(60,255,160,0.2); }
+  .s-err { background: rgba(255,77,77,0.1); color: var(--red); border: 1px solid rgba(255,77,77,0.2); }
+  .s-manual { background: rgba(255,181,71,0.1); color: var(--amber); border: 1px solid rgba(255,181,71,0.2); }
+
+  /* METRIC GRID */
+  .mgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .mcard { background: var(--bg3); border-radius: var(--radius); padding: 14px 16px; border: 1px solid var(--border); }
+  .mcard-label { font-size: 10px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-family: 'DM Mono', monospace; }
+  .mcard-val { font-size: 26px; font-weight: 300; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .mcard-break { font-size: 11px; color: var(--text3); line-height: 1.6; font-family: 'DM Mono', monospace; }
+
+  /* MANUAL ENTRY */
+  .manual-in { background: var(--bg3); border-radius: var(--radius); padding: 14px; margin-top: 12px; border: 1px solid rgba(255,181,71,0.15); }
+  .mgrid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .mgrid3 label { font-size: 10px; color: var(--text3); margin-bottom: 5px; display: block; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* HISTORY */
+  .hrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .hrow:last-child { border-bottom: none; }
+  .hstats { display: grid; grid-template-columns: repeat(3, 60px); gap: 8px; text-align: right; flex-shrink: 0; }
+  .hstat-l { font-size: 9px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+  .hstat-v { font-size: 13px; font-weight: 500; font-family: 'DM Mono', monospace; }
+
+  /* TAGS PANEL */
+  .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .ti { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .ti:last-child { border-bottom: none; }
+  .add-form { display: none; background: var(--bg3); padding: 14px; border-radius: var(--radius); margin-bottom: 14px; border: 1px solid var(--border2); }
+
+  /* SETTINGS */
+  .sf { margin-bottom: 18px; }
+  .sf label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 7px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .notice { background: rgba(212,240,60,0.06); border: 1px solid rgba(212,240,60,0.15); border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: rgba(212,240,60,0.8); margin-bottom: 16px; }
+  .notice-warn { background: rgba(255,181,71,0.06); border: 1px solid rgba(255,181,71,0.2); border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: var(--amber); margin-bottom: 16px; }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 18px 0; }
+  .row { display: flex; gap: 8px; align-items: flex-start; }
+  .f1 { flex: 1; }
+  .empty { text-align: center; padding: 48px 20px; color: var(--text3); font-size: 13px; font-family: 'DM Mono', monospace; }
+
+  /* PLAT SUPPORT GRID */
+  .plat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .plat-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); }
+
+  @media (max-width: 600px) {
+    .mgrid { grid-template-columns: 1fr; }
+    .mgrid3 { grid-template-columns: 1fr; }
+    .tgrid { grid-template-columns: 1fr; }
+    .hstats { grid-template-columns: repeat(3, 48px); gap: 4px; }
+    .panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">TB</div>
+      <div class="brand-name">Asset Performance Analytics</div>
+    </div>
+    <div class="topbar-right">
+      <div class="conn-pill" id="conn-pill">
+        <div class="conn-dot off" id="conn-dot"></div>
+        <span id="conn-label">No proxy</span>
+      </div>
+      <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>
+      <button class="btn btn-sm btn-accent" onclick="switchTab('settings')">Settings</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" id="tab-analyze" onclick="switchTab('analyze')">Analyze</button>
+    <button class="tab" id="tab-batch" onclick="switchTab('batch')">Batch</button>
+    <button class="tab" id="tab-history" onclick="switchTab('history')">History</button>
+    <button class="tab" id="tab-tags" onclick="switchTab('tags')">Tags & Groups</button>
+    <button class="tab" id="tab-settings" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- PANELS -->
+  <div class="panels">
+
+    <!-- ANALYZE -->
+    <div class="panel active" id="panel-analyze">
+      <div class="slabel">Paste a URL</div>
+      <div class="url-wrap">
+        <input type="url" id="single-url" placeholder="https://twitter.com/TheBlock__/status/... or share.transistor.fm/s/..." onkeydown="if(event.key==='Enter')analyzeOne()">
+        <button class="btn btn-accent btn-sm url-btn-inline" onclick="analyzeOne()">Analyze</button>
+      </div>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:160px">
+          <div class="slabel">Tags</div>
+          <div id="tag-sel" style="display:flex;gap:5px;flex-wrap:wrap;min-height:26px"></div>
+        </div>
+        <div style="min-width:150px">
+          <div class="slabel">Group</div>
+          <select id="grp-sel" style="width:160px"></select>
+        </div>
+      </div>
+      <div id="analyze-out"></div>
+    </div>
+
+    <!-- BATCH -->
+    <div class="panel" id="panel-batch">
+      <div class="slabel">Paste URLs — one per line</div>
+      <textarea id="batch-urls" style="height:120px;margin-bottom:14px;resize:vertical;background:var(--bg3)" placeholder="https://twitter.com/TheBlock__/status/...&#10;https://share.transistor.fm/s/abc123&#10;https://youtube.com/watch?v=..."></textarea>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:160px">
+          <div class="slabel">Apply Tags to All</div>
+          <div id="batch-tag-sel" style="display:flex;gap:5px;flex-wrap:wrap;min-height:26px"></div>
+        </div>
+        <div>
+          <div class="slabel">Apply Group to All</div>
+          <select id="batch-grp-sel" style="width:160px"></select>
+        </div>
+      </div>
+      <button class="btn btn-accent" onclick="runBatch()" style="margin-bottom:20px">Analyze All</button>
+      <div id="batch-out"></div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="panel" id="panel-history">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <select id="hist-grp" style="width:150px" onchange="renderHistory()"><option value="">All groups</option></select>
+        <div id="hist-tag-filter" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        <button class="btn btn-sm" onclick="clearHistory()" style="margin-left:auto">Clear all</button>
+      </div>
+      <div id="hist-list"></div>
+    </div>
+
+    <!-- TAGS & GROUPS -->
+    <div class="panel" id="panel-tags">
+      <div class="tgrid">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="slabel" style="margin:0">Tags</div>
+            <button class="btn btn-sm" onclick="document.getElementById('add-tag-f').style.display='block'">+ Add</button>
+          </div>
+          <div class="add-form" id="add-tag-f">
+            <div class="row" style="margin-bottom:10px">
+              <input class="f1" id="new-tag-n" placeholder="Tag name" style="background:var(--bg2)">
+              <select id="new-tag-c" style="width:95px;background:var(--bg2)">
+                <option value="lime">Lime</option>
+                <option value="blue">Blue</option>
+                <option value="purple">Purple</option>
+                <option value="coral">Coral</option>
+                <option value="amber">Amber</option>
+                <option value="teal">Teal</option>
+                <option value="pink">Pink</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-accent btn-sm" onclick="addTag()">Add tag</button>
+              <button class="btn btn-sm" onclick="document.getElementById('add-tag-f').style.display='none'">Cancel</button>
+            </div>
+          </div>
+          <div id="tags-list"></div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="slabel" style="margin:0">Groups</div>
+            <button class="btn btn-sm" onclick="document.getElementById('add-grp-f').style.display='block'">+ Add</button>
+          </div>
+          <div class="add-form" id="add-grp-f">
+            <div class="row" style="margin-bottom:10px">
+              <input class="f1" id="new-grp-n" placeholder="e.g. Q2 Campaign, Breaking News" style="background:var(--bg2)">
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-accent btn-sm" onclick="addGroup()">Add group</button>
+              <button class="btn btn-sm" onclick="document.getElementById('add-grp-f').style.display='none'">Cancel</button>
+            </div>
+          </div>
+          <div id="grps-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel" id="panel-settings">
+      <div style="max-width:500px">
+        <div class="sf">
+          <label>Cloudflare Worker proxy URL</label>
+          <div class="row">
+            <input class="f1" type="url" id="s-proxy" placeholder="https://summer-grass-090c.remitmap.workers.dev" style="background:var(--bg3)">
+            <button class="btn btn-sm" onclick="testProxy()">Test</button>
+          </div>
+          <div id="proxy-test-result" style="font-size:11px;margin-top:7px;font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="notice">Your API keys live securely in Cloudflare as secrets. Only the worker URL is stored here — nothing sensitive touches this page.</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-accent" onclick="saveSettings()">Save settings</button>
+          <span id="saved-msg" style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;display:none">Saved.</span>
+        </div>
+        <div class="divider"></div>
+        <div class="slabel">Platform support</div>
+        <div class="plat-grid">
+          <div class="plat-row"><div class="pdot" style="background:#1d9bf0"></div>Twitter / X — Sprout proxy</div>
+          <div class="plat-row"><div class="pdot" style="background:#ff0000"></div>YouTube — Sprout proxy</div>
+          <div class="plat-row"><div class="pdot" style="background:#0a66c2"></div>LinkedIn — Sprout proxy</div>
+          <div class="plat-row"><div class="pdot" style="background:#e1306c"></div>Instagram — Sprout proxy</div>
+          <div class="plat-row"><div class="pdot" style="background:#7c3aed"></div>Transistor.fm — direct proxy</div>
+          <div class="plat-row"><div class="pdot" style="background:#555"></div>TikTok, Twitch — manual entry</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var settings = JSON.parse(localStorage.getItem('tb_s3') || '{}');
+var tags = JSON.parse(localStorage.getItem('tb_t') || '[]');
+var groups = JSON.parse(localStorage.getItem('tb_g') || '[]');
+var hist = JSON.parse(localStorage.getItem('tb_h3') || '[]');
+var selTags = [];
+var bSelTags = [];
+var histTagFilter = null;
+
+var TC = {
+  lime:   { bg: 'rgba(212,240,60,0.12)',  tx: '#d4f03c', bd: 'rgba(212,240,60,0.3)' },
+  blue:   { bg: 'rgba(91,157,255,0.12)',  tx: '#5b9dff', bd: 'rgba(91,157,255,0.3)' },
+  purple: { bg: 'rgba(167,139,250,0.12)', tx: '#a78bfa', bd: 'rgba(167,139,250,0.3)' },
+  coral:  { bg: 'rgba(255,107,74,0.12)',  tx: '#ff6b4a', bd: 'rgba(255,107,74,0.3)' },
+  amber:  { bg: 'rgba(255,181,71,0.12)',  tx: '#ffb547', bd: 'rgba(255,181,71,0.3)' },
+  teal:   { bg: 'rgba(60,255,200,0.1)',   tx: '#3cffc8', bd: 'rgba(60,255,200,0.25)' },
+  pink:   { bg: 'rgba(255,105,180,0.12)', tx: '#ff69b4', bd: 'rgba(255,105,180,0.3)' },
+};
+
+var PC = {
+  twitter:    { label: 'Twitter / X',        color: '#1d9bf0', vl: 'Media views',  api: 'sprout' },
+  youtube:    { label: 'YouTube',             color: '#ff0000', vl: 'Views',        api: 'sprout' },
+  linkedin:   { label: 'LinkedIn',            color: '#0a66c2', vl: 'Clip views',   api: 'sprout' },
+  instagram:  { label: 'Instagram',           color: '#e1306c', vl: 'Views',        api: 'sprout' },
+  tiktok:     { label: 'TikTok',              color: '#69c9d0', vl: 'Views',        api: 'none'   },
+  twitch:     { label: 'Twitch',              color: '#9146ff', vl: 'Views',        api: 'none'   },
+  transistor: { label: 'Podcast (Transistor)',color: '#7c3aed', vl: 'Downloads',    api: 'transistor' },
+  theblock:   { label: 'The Block Website',   color: '#d4f03c', vl: 'Page views',   api: 'none'   },
+  unknown:    { label: 'Unknown platform',    color: '#555',    vl: 'Views',        api: 'none'   },
+};
+
+function detectPlat(url) {
+  try {
+    var u = new URL(url), h = u.hostname.replace('www.', '');
+    if (h === 'twitter.com' || h === 'x.com') return 'twitter';
+    if (h === 'youtube.com' || h === 'youtu.be') return 'youtube';
+    if (h === 'linkedin.com' || h === 'lnkd.in') return 'linkedin';
+    if (h === 'instagram.com') return 'instagram';
+    if (h === 'tiktok.com') return 'tiktok';
+    if (h === 'twitch.tv') return 'twitch';
+    if (h === 'transistor.fm' || h === 'share.transistor.fm') return 'transistor';
+    if (h.includes('theblock')) return 'theblock';
+    return 'unknown';
+  } catch(e) { return 'unknown'; }
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach(function(x) { x.classList.remove('active'); });
+  document.querySelectorAll('.panel').forEach(function(x) { x.classList.remove('active'); });
+  document.getElementById('tab-' + t).classList.add('active');
+  document.getElementById('panel-' + t).classList.add('active');
+  if (t === 'history') renderHistory();
+}
+
+function saveSettings() {
+  settings.proxyUrl = (document.getElementById('s-proxy').value || '').trim().replace(/\/$/, '');
+  localStorage.setItem('tb_s3', JSON.stringify(settings));
+  var m = document.getElementById('saved-msg');
+  m.style.display = 'inline';
+  setTimeout(function() { m.style.display = 'none'; }, 2000);
+  updateConnStatus();
+}
+
+function loadSettings() {
+  document.getElementById('s-proxy').value = settings.proxyUrl || '';
+  updateConnStatus();
+}
+
+function updateConnStatus() {
+  var dot = document.getElementById('conn-dot');
+  var lbl = document.getElementById('conn-label');
+  if (settings.proxyUrl) {
+    dot.className = 'conn-dot on';
+    lbl.textContent = 'Proxy connected';
+  } else {
+    dot.className = 'conn-dot off';
+    lbl.textContent = 'No proxy';
+  }
+}
+
+async function testProxy() {
+  var url = (document.getElementById('s-proxy').value || '').trim().replace(/\/$/, '');
+  var el = document.getElementById('proxy-test-result');
+  if (!url) { el.style.color = 'var(--red)'; el.textContent = 'Enter a proxy URL first'; return; }
+  el.style.color = 'var(--text3)'; el.textContent = 'Testing...';
+  try {
+    var resp = await fetch(url + '/transistor/analytics/episodes/test');
+    if (resp.status === 404 || resp.status === 200 || resp.status === 401 || resp.status === 422 || resp.status === 500) {
+      el.style.color = 'var(--green)'; el.textContent = 'Proxy is reachable';
+    } else {
+      el.style.color = 'var(--amber)'; el.textContent = 'Responded with status ' + resp.status;
+    }
+  } catch(e) {
+    el.style.color = 'var(--red)'; el.textContent = 'Could not reach: ' + e.message;
+  }
+}
+
+function renderTagSel(cid, sel, fn) {
+  var el = document.getElementById(cid); if (!el) return;
+  if (!tags.length) { el.innerHTML = '<span style="font-size:11px;color:var(--text3)">Add tags in Tags & Groups tab</span>'; return; }
+  el.innerHTML = tags.map(function(t) {
+    var c = TC[t.color] || TC.lime, on = sel.indexOf(t.id) >= 0;
+    return '<span class="tag-pill ' + (on ? '' : 'off') + '" onclick="' + fn + '(\'' + t.id + '\')" style="background:' + c.bg + ';color:' + c.tx + ';border-color:' + c.bd + '">' + t.name + '</span>';
+  }).join('');
+}
+
+function toggleSel(id) { var i = selTags.indexOf(id); if (i >= 0) selTags.splice(i, 1); else selTags.push(id); renderTagSel('tag-sel', selTags, 'toggleSel'); }
+function toggleBSel(id) { var i = bSelTags.indexOf(id); if (i >= 0) bSelTags.splice(i, 1); else bSelTags.push(id); renderTagSel('batch-tag-sel', bSelTags, 'toggleBSel'); }
+
+function renderGrpSel(id) {
+  var el = document.getElementById(id); if (!el) return;
+  var cur = el.value;
+  el.innerHTML = '<option value="">No group</option>' + groups.map(function(g) { return '<option value="' + g.id + '"' + (cur === g.id ? ' selected' : '') + '>' + g.name + '</option>'; }).join('');
+}
+
+function tagPills(tagIds, small) {
+  return (tagIds || []).map(function(id) {
+    var t = tags.find(function(x) { return x.id === id; }); if (!t) return '';
+    var c = TC[t.color] || TC.lime;
+    var ps = small ? 'font-size:10px;padding:2px 7px' : '';
+    return '<span class="tag-pill" style="background:' + c.bg + ';color:' + c.tx + ';border-color:' + c.bd + ';opacity:1;' + ps + '">' + t.name + '</span>';
+  }).join('');
+}
+
+function renderTagsList() {
+  var el = document.getElementById('tags-list'); if (!el) return;
+  if (!tags.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3)">No tags yet</div>'; return; }
+  el.innerHTML = tags.map(function(t) {
+    var c = TC[t.color] || TC.lime;
+    return '<div class="ti"><span class="tag-pill" style="background:' + c.bg + ';color:' + c.tx + ';border-color:' + c.bd + ';opacity:1">' + t.name + '</span><button class="btn btn-sm" onclick="removeTag(\'' + t.id + '\')">Remove</button></div>';
+  }).join('');
+}
+
+function renderGrpsList() {
+  var el = document.getElementById('grps-list'); if (!el) return;
+  if (!groups.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3)">No groups yet</div>'; return; }
+  el.innerHTML = groups.map(function(g) {
+    return '<div class="ti"><span style="font-size:13px;color:var(--text2)">' + g.name + '</span><button class="btn btn-sm" onclick="removeGroup(\'' + g.id + '\')">Remove</button></div>';
+  }).join('');
+}
+
+function addTag() {
+  var n = document.getElementById('new-tag-n').value.trim(), c = document.getElementById('new-tag-c').value;
+  if (!n) return;
+  tags.push({ id: 't' + Date.now(), name: n, color: c });
+  localStorage.setItem('tb_t', JSON.stringify(tags));
+  document.getElementById('new-tag-n').value = '';
+  document.getElementById('add-tag-f').style.display = 'none';
+  refreshAll();
+}
+
+function removeTag(id) {
+  tags = tags.filter(function(t) { return t.id !== id; });
+  localStorage.setItem('tb_t', JSON.stringify(tags));
+  refreshAll();
+}
+
+function addGroup() {
+  var n = document.getElementById('new-grp-n').value.trim(); if (!n) return;
+  groups.push({ id: 'g' + Date.now(), name: n });
+  localStorage.setItem('tb_g', JSON.stringify(groups));
+  document.getElementById('new-grp-n').value = '';
+  document.getElementById('add-grp-f').style.display = 'none';
+  refreshAll();
+}
+
+function removeGroup(id) {
+  groups = groups.filter(function(g) { return g.id !== id; });
+  localStorage.setItem('tb_g', JSON.stringify(groups));
+  refreshAll();
+}
+
+function refreshAll() {
+  renderTagsList(); renderGrpsList();
+  renderTagSel('tag-sel', selTags, 'toggleSel');
+  renderTagSel('batch-tag-sel', bSelTags, 'toggleBSel');
+  renderGrpSel('grp-sel'); renderGrpSel('batch-grp-sel');
+  renderGrpSel('hist-grp'); renderHistTagFilter();
+}
+
+function renderCard(r, loading) {
+  var pl = r.platform || detectPlat(r.url);
+  var cfg = PC[pl] || PC.unknown;
+  var grpN = r.group ? (groups.find(function(g) { return g.id === r.group; }) || { name: '' }).name : '';
+  var pills = tagPills(r.tags);
+  var status = '', body = '';
+
+  if (loading) {
+    status = '<span class="sbadge s-load">fetching...</span>';
+    body = '<div class="mgrid">' + ['Views / Downloads', 'Impressions', 'Engagements'].map(function(l) {
+      return '<div class="mcard"><div class="mcard-label">' + l + '</div><div class="mcard-val" style="color:var(--text3)">—</div></div>';
+    }).join('') + '</div>';
+  } else if (r.status === 'success' && r.metrics) {
+    status = '<span class="sbadge s-ok">fetched</span>';
+    body = '<div class="mgrid">' + [r.metrics.views, r.metrics.impressions, r.metrics.engagements].map(function(m) {
+      if (!m) return '<div class="mcard"><div class="mcard-label">—</div><div class="mcard-val" style="color:var(--text3)">—</div></div>';
+      var tot = m.total;
+      var ts = (tot === null || tot === undefined) ? 'N/A' : Number(tot).toLocaleString();
+      var valColor = (tot !== null && tot !== undefined) ? cfg.color : 'var(--text3)';
+      return '<div class="mcard"><div class="mcard-label">' + m.label + '</div><div class="mcard-val" style="color:' + valColor + '">' + ts + '</div><div class="mcard-break">' + (m.breakdown || []).join('<br>') + '</div></div>';
+    }).join('') + '</div>';
+  } else if (r.status === 'manual') {
+    status = '<span class="sbadge s-manual">manual entry</span>';
+    body = '<div class="manual-in"><div style="font-size:11px;color:var(--amber);margin-bottom:8px">' + (r.error || 'Enter metrics manually') + '</div><div class="mgrid3"><div><label>' + cfg.vl + '</label><input type="number" placeholder="0" style="background:var(--bg2)" onchange="saveManual(\'' + r.id + '\',\'views\',this.value)"></div><div><label>Impressions</label><input type="number" placeholder="0" style="background:var(--bg2)" onchange="saveManual(\'' + r.id + '\',\'impressions\',this.value)"></div><div><label>Engagements</label><input type="number" placeholder="0" style="background:var(--bg2)" onchange="saveManual(\'' + r.id + '\',\'engagements\',this.value)"></div></div></div>';
+  } else if (r.status === 'error') {
+    status = '<span class="sbadge s-err">error</span>';
+    body = '<div style="font-size:12px;color:var(--red);margin-top:10px;font-family:\'DM Mono\',monospace">' + (r.error || 'Unknown error') + '</div>';
+  } else {
+    status = '<span class="sbadge s-load">pending</span>';
+  }
+
+  return '<div class="rcard" id="rc-' + r.id + '">' +
+    '<div class="rhead"><div class="plat"><div class="pdot" style="background:' + cfg.color + '"></div><span class="plat-name">' + cfg.label + '</span>' +
+    (r.epTitle ? '<span style="font-size:11px;color:var(--text3)"> — ' + r.epTitle + '</span>' : '') +
+    (grpN ? '<span style="font-size:10px;background:var(--bg3);padding:2px 9px;border-radius:99px;color:var(--text3);border:1px solid var(--border);font-family:\'DM Mono\',monospace">' + grpN + '</span>' : '') +
+    '</div><div>' + status + '</div></div>' +
+    '<div class="rurl">' + r.url + '</div>' +
+    (pills ? '<div class="rtags">' + pills + '</div>' : '') +
+    body + '</div>';
+}
+
+async function analyzeOne() {
+  var url = document.getElementById('single-url').value.trim();
+  if (!url) return;
+  if (!settings.proxyUrl) {
+    document.getElementById('analyze-out').innerHTML = '<div class="notice-warn">Add your proxy URL in Settings first.</div>';
+    return;
+  }
+  var r = { id: 'r' + Date.now(), url: url, tags: [].concat(selTags), group: document.getElementById('grp-sel').value, timestamp: new Date().toISOString() };
+  document.getElementById('analyze-out').innerHTML = renderCard(r, true);
+  var enriched = await fetchMetrics(r);
+  var el = document.getElementById('rc-' + r.id);
+  if (el) el.outerHTML = renderCard(enriched, false);
+  saveHist(enriched);
+}
+
+async function runBatch() {
+  var raw = document.getElementById('batch-urls').value.trim(); if (!raw) return;
+  if (!settings.proxyUrl) { document.getElementById('batch-out').innerHTML = '<div class="notice-warn">Add your proxy URL in Settings first.</div>'; return; }
+  var urls = raw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+  var grp = document.getElementById('batch-grp-sel').value;
+  var rs = urls.map(function(url, i) { return { id: 'b' + Date.now() + i, url: url, tags: [].concat(bSelTags), group: grp, timestamp: new Date().toISOString() }; });
+  var container = document.getElementById('batch-out');
+  container.innerHTML = rs.map(function(r) { return renderCard(r, true); }).join('');
+  for (var i = 0; i < rs.length; i++) {
+    var enriched = await fetchMetrics(rs[i]);
+    var el = document.getElementById('rc-' + rs[i].id);
+    if (el) el.outerHTML = renderCard(enriched, false);
+    saveHist(enriched);
+  }
+}
+
+async function fetchMetrics(r) {
+  var pl = detectPlat(r.url);
+  r.platform = pl; r.platformLabel = (PC[pl] || PC.unknown).label;
+  if (pl === 'transistor') return await fetchTransistor(r);
+  if (pl === 'twitter' || pl === 'youtube' || pl === 'linkedin' || pl === 'instagram') return await fetchSprout(r);
+  r.status = 'manual'; r.error = 'No API integration for this platform — enter manually';
+  return r;
+}
+
+async function fetchTransistor(r) {
+  try {
+    var u = new URL(r.url), parts = u.pathname.split('/').filter(Boolean), epId = null;
+    if (parts[0] === 's' && parts[1]) epId = parts[1];
+    if (!epId) {
+      var ai = await callAI('Extract the Transistor.fm episode ID from this URL: ' + r.url + '. Return JSON {"episodeId":"..."} or {"episodeId":null}.');
+      epId = ai.episodeId || null;
+    }
+    if (!epId) { r.status = 'manual'; r.error = 'Could not extract episode ID — enter manually'; return r; }
+    var end = new Date().toISOString().split('T')[0];
+    var start = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    var resp = await fetch(settings.proxyUrl + '/transistor/analytics/episodes/' + epId + '?start_date=' + start + '&end_date=' + end);
+    if (!resp.ok) { var e = await resp.json(); r.status = 'error'; r.error = e.error || 'Transistor error ' + resp.status; return r; }
+    var data = await resp.json();
+    var dl = data.data && data.data.attributes ? data.data.attributes.downloads || 0 : 0;
+    r.epTitle = data.data && data.data.attributes ? data.data.attributes.title || '' : '';
+    r.status = 'success';
+    r.metrics = {
+      views: { total: dl, label: 'Downloads', breakdown: [Number(dl).toLocaleString() + ' downloads (last 30 days)'] },
+      impressions: { total: null, label: 'Impressions', breakdown: ['Not tracked for podcasts'] },
+      engagements: { total: null, label: 'Engagements', breakdown: ['Not tracked for podcasts'] },
+    };
+    return r;
+  } catch(e) { r.status = 'error'; r.error = e.message; return r; }
+}
+
+async function fetchSprout(r) {
+  try {
+    var resp = await fetch(settings.proxyUrl + '/sprout/analytics/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filters: { created_time: { start: Math.floor((Date.now() - 90 * 86400000) / 1000), end: Math.floor(Date.now() / 1000) } }, metrics: ['impressions', 'engagements', 'video_views', 'likes', 'shares', 'comments', 'clicks'], page: 1, per_page: 50 })
+    });
+    if (!resp.ok) { var e = await resp.json(); r.status = 'error'; r.error = e.error || 'Sprout error ' + resp.status; return r; }
+    var data = await resp.json();
+    var posts = data.data || [];
+    var urlSlug = r.url.split('/').pop();
+    var match = posts.find(function(p) { return p.permalink && (p.permalink === r.url || r.url.indexOf(p.permalink) >= 0 || p.permalink.indexOf(urlSlug) >= 0); });
+    if (match) {
+      var m = match.metrics || {};
+      r.status = 'success';
+      r.metrics = {
+        views: { total: m.video_views || 0, label: PC[r.platform].vl, breakdown: [(m.video_views || 0).toLocaleString() + ' video views', (m.clicks || 0).toLocaleString() + ' link clicks'] },
+        impressions: { total: m.impressions || 0, label: 'Impressions', breakdown: [(m.impressions || 0).toLocaleString() + ' impressions'] },
+        engagements: { total: m.engagements || 0, label: 'Engagements', breakdown: [(m.likes || 0).toLocaleString() + ' likes', (m.shares || 0).toLocaleString() + ' shares', (m.comments || 0).toLocaleString() + ' comments'] },
+      };
+    } else {
+      r.status = 'manual'; r.error = 'Post not found in Sprout results — enter metrics manually';
+    }
+    return r;
+  } catch(e) { r.status = 'error'; r.error = e.message; return r; }
+}
+
+async function callAI(prompt) {
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, messages: [{ role: 'user', content: prompt + '\n\nRespond ONLY with valid JSON, no markdown.' }] }) });
+    var data = await resp.json();
+    var txt = data.content && data.content[0] ? data.content[0].text : '{}';
+    return JSON.parse(txt.replace(/```json|```/g, '').trim());
+  } catch(e) { return {}; }
+}
+
+function saveManual(id, type, val) {
+  var r = hist.find(function(x) { return x.id === id; }); if (!r) return;
+  if (!r.metrics) r.metrics = { views: { total: null, label: 'Views', breakdown: [] }, impressions: { total: null, label: 'Impressions', breakdown: [] }, engagements: { total: null, label: 'Engagements', breakdown: [] } };
+  r.metrics[type].total = parseInt(val) || 0;
+  r.status = 'success'; saveHist(r);
+}
+
+function saveHist(r) {
+  hist = [r].concat(hist.filter(function(x) { return x.id !== r.id; })).slice(0, 300);
+  localStorage.setItem('tb_h3', JSON.stringify(hist));
+}
+
+function renderHistory() {
+  var el = document.getElementById('hist-list'); if (!el) return;
+  var gf = (document.getElementById('hist-grp') || {}).value || '';
+  var filtered = hist.filter(function(h) {
+    if (gf && h.group !== gf) return false;
+    if (histTagFilter && !(h.tags || []).includes(histTagFilter)) return false;
+    return true;
+  });
+  if (!filtered.length) { el.innerHTML = '<div class="empty">// no history yet</div>'; return; }
+  el.innerHTML = filtered.map(function(h) {
+    var cfg = PC[h.platform || 'unknown'] || PC.unknown;
+    var date = h.timestamp ? new Date(h.timestamp).toLocaleDateString() : '';
+    var v = h.metrics && h.metrics.views ? h.metrics.views.total : null;
+    var imp = h.metrics && h.metrics.impressions ? h.metrics.impressions.total : null;
+    var eng = h.metrics && h.metrics.engagements ? h.metrics.engagements.total : null;
+    var fmt = function(n) { return (n !== null && n !== undefined) ? Number(n).toLocaleString() : '—'; };
+    var pills = tagPills(h.tags, true);
+    return '<div class="hrow"><div class="pdot" style="background:' + cfg.color + ';flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:\'DM Mono\',monospace">' + h.url + '</div>' + (pills ? '<div style="display:flex;gap:4px;margin-top:4px">' + pills + '</div>' : '') + '</div><div class="hstats"><div><div class="hstat-l">Views</div><div class="hstat-v">' + fmt(v) + '</div></div><div><div class="hstat-l">Impr.</div><div class="hstat-v">' + fmt(imp) + '</div></div><div><div class="hstat-l">Eng.</div><div class="hstat-v">' + fmt(eng) + '</div></div></div><div style="font-size:10px;color:var(--text3);flex-shrink:0;font-family:\'DM Mono\',monospace">' + date + '</div></div>';
+  }).join('');
+}
+
+function renderHistTagFilter() {
+  var el = document.getElementById('hist-tag-filter'); if (!el) return;
+  el.innerHTML = tags.map(function(t) {
+    var c = TC[t.color] || TC.lime, on = histTagFilter === t.id;
+    return '<span class="tag-pill ' + (on ? '' : 'off') + '" onclick="toggleHistTag(\'' + t.id + '\')" style="background:' + c.bg + ';color:' + c.tx + ';border-color:' + c.bd + ';font-size:10px;padding:2px 8px">' + t.name + '</span>';
+  }).join('');
+}
+
+function toggleHistTag(id) { histTagFilter = histTagFilter === id ? null : id; renderHistTagFilter(); renderHistory(); }
+
+function clearHistory() {
+  if (!confirm('Clear all history?')) return;
+  hist = []; localStorage.setItem('tb_h3', '[]'); renderHistory();
+}
+
+function exportCSV() {
+  var rows = [['URL', 'Platform', 'Tags', 'Group', 'Views/Downloads', 'Impressions', 'Engagements', 'Date']];
+  hist.forEach(function(h) {
+    var tn = (h.tags || []).map(function(id) { var t = tags.find(function(x) { return x.id === id; }); return t ? t.name : id; }).join(';');
+    var gn = h.group ? (groups.find(function(g) { return g.id === h.group; }) || { name: h.group }).name : '';
+    rows.push([h.url, h.platformLabel || h.platform || '', tn, gn,
+      h.metrics && h.metrics.views && h.metrics.views.total != null ? h.metrics.views.total : '',
+      h.metrics && h.metrics.impressions && h.metrics.impressions.total != null ? h.metrics.impressions.total : '',
+      h.metrics && h.metrics.engagements && h.metrics.engagements.total != null ? h.metrics.engagements.total : '',
+      h.timestamp ? new Date(h.timestamp).toLocaleDateString() : '']);
+  });
+  var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'theblock-analytics-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+}
+
+loadSettings();
+refreshAll();
+renderHistory();
+</script>
+</body>
+</html>
