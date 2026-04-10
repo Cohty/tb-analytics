@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #0e0e0e;
@@ -198,7 +199,7 @@
     <!-- BATCH -->
     <div class="panel" id="panel-batch">
       <div class="slabel">Paste URLs — one per line</div>
-      <textarea id="batch-urls" style="height:120px;margin-bottom:14px;resize:vertical;background:var(--bg3)" placeholder="https://twitter.com/TheBlock__/status/...&#10;https://share.transistor.fm/s/abc123&#10;https://youtube.com/watch?v=..."></textarea>
+      <textarea id="batch-urls" style="height:120px;margin-bottom:14px;resize:vertical;background:var(--bg3)" placeholder="https://dashboard.transistor.fm/shows/the-crypto-beat/episodes/...&#10;https://share.transistor.fm/s/abc123&#10;https://youtube.com/watch?v=..."></textarea>
       <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px">
         <div style="flex:1;min-width:160px">
           <div class="slabel">Apply Tags to All</div>
@@ -211,6 +212,19 @@
       </div>
       <button class="btn btn-accent" onclick="runBatch()" style="margin-bottom:20px">Analyze All</button>
       <div id="batch-out"></div>
+      <div id="chart-section" style="display:none;margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:13px;font-weight:500">Episode comparison</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="chart-type-btn" onclick="toggleChartType()">Switch to line</button>
+            <button class="btn btn-accent btn-sm" onclick="generateInsights()">AI insights</button>
+          </div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px">
+          <canvas id="ep-chart" style="max-height:320px"></canvas>
+        </div>
+        <div id="insights-out" style="margin-top:16px"></div>
+      </div>
     </div>
 
     <!-- HISTORY -->
@@ -514,7 +528,8 @@ function renderCard(r, loading) {
   }
 
   return '<div class="rcard" id="rc-' + r.id + '">' +
-    '<div class="rhead"><div class="plat"><div class="pdot" style="background:' + cfg.color + '"></div><span class="plat-name">' + cfg.label + '</span>' +
+    '<div class="rhead"><div class="plat"><div class="pdot" style="background:' + cfg.color + '"></div>' +
+    '<span class="plat-name">' + (r.showName || cfg.label) + '</span>' +
     (r.epTitle ? '<span style="font-size:11px;color:var(--text3)"> — ' + r.epTitle + '</span>' : '') +
     (grpN ? '<span style="font-size:10px;background:var(--bg3);padding:2px 9px;border-radius:99px;color:var(--text3);border:1px solid var(--border);font-family:\'DM Mono\',monospace">' + grpN + '</span>' : '') +
     '</div><div>' + status + '</div></div>' +
@@ -538,6 +553,10 @@ async function analyzeOne() {
   saveHist(enriched);
 }
 
+var batchResults = [];
+var epChart = null;
+var chartType = 'bar';
+
 async function runBatch() {
   var raw = document.getElementById('batch-urls').value.trim(); if (!raw) return;
   if (!settings.proxyUrl) { document.getElementById('batch-out').innerHTML = '<div class="notice-warn">Add your proxy URL in Settings first.</div>'; return; }
@@ -545,12 +564,133 @@ async function runBatch() {
   var grp = document.getElementById('batch-grp-sel').value;
   var rs = urls.map(function(url, i) { return { id: 'b' + Date.now() + i, url: url, tags: [].concat(bSelTags), group: grp, timestamp: new Date().toISOString() }; });
   var container = document.getElementById('batch-out');
+  document.getElementById('chart-section').style.display = 'none';
+  document.getElementById('insights-out').innerHTML = '';
+  batchResults = [];
   container.innerHTML = rs.map(function(r) { return renderCard(r, true); }).join('');
   for (var i = 0; i < rs.length; i++) {
     var enriched = await fetchMetrics(rs[i]);
     var el = document.getElementById('rc-' + rs[i].id);
     if (el) el.outerHTML = renderCard(enriched, false);
     saveHist(enriched);
+    batchResults.push(enriched);
+  }
+  // Show chart if we have successful results with views data
+  var chartable = batchResults.filter(function(r) { return r.status === 'success' && r.metrics && r.metrics.views && r.metrics.views.total !== null; });
+  if (chartable.length > 1) {
+    document.getElementById('chart-section').style.display = 'block';
+    renderEpChart(chartable);
+  }
+}
+
+function renderEpChart(results) {
+  var labels = results.map(function(r) {
+    var title = r.epTitle || r.url.split('/').pop();
+    return title.length > 40 ? title.substring(0, 38) + '…' : title;
+  });
+  var values = results.map(function(r) { return r.metrics.views.total || 0; });
+  var avg = values.reduce(function(a, b) { return a + b; }, 0) / values.length;
+  var colors = values.map(function(v) { return v >= avg ? 'rgba(212,240,60,0.8)' : 'rgba(212,240,60,0.3)'; });
+  var borderColors = values.map(function(v) { return v >= avg ? '#d4f03c' : 'rgba(212,240,60,0.5)'; });
+
+  var ctx = document.getElementById('ep-chart').getContext('2d');
+  if (epChart) epChart.destroy();
+
+  Chart.defaults.color = '#555';
+  Chart.defaults.font.family = 'DM Mono, monospace';
+  Chart.defaults.font.size = 11;
+
+  epChart = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Downloads (30 days)',
+        data: values,
+        backgroundColor: colors,
+        borderColor: borderColors,
+        borderWidth: 1,
+        borderRadius: chartType === 'bar' ? 4 : 0,
+        tension: 0.3,
+        fill: chartType === 'line',
+        pointBackgroundColor: borderColors,
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e1e1e',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          titleColor: '#d4f03c',
+          bodyColor: '#888',
+          callbacks: {
+            label: function(ctx) { return ' ' + ctx.parsed.y.toLocaleString() + ' downloads'; }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#555', maxRotation: 30 }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#555', callback: function(v) { return v.toLocaleString(); } },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function toggleChartType() {
+  chartType = chartType === 'bar' ? 'line' : 'bar';
+  document.getElementById('chart-type-btn').textContent = chartType === 'bar' ? 'Switch to line' : 'Switch to bar';
+  var chartable = batchResults.filter(function(r) { return r.status === 'success' && r.metrics && r.metrics.views && r.metrics.views.total !== null; });
+  if (chartable.length > 1) renderEpChart(chartable);
+}
+
+async function generateInsights() {
+  var el = document.getElementById('insights-out');
+  var chartable = batchResults.filter(function(r) { return r.status === 'success' && r.metrics && r.metrics.views && r.metrics.views.total !== null; });
+  if (!chartable.length) return;
+
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3);font-family:\'DM Mono\',monospace;padding:14px 0">Analyzing performance patterns...</div>';
+
+  var epData = chartable.map(function(r) {
+    return '"' + (r.epTitle || 'Unknown') + '": ' + (r.metrics.views.total || 0) + ' downloads';
+  }).join(', ');
+
+  var showName = chartable[0].showName || 'this podcast';
+  var avg = Math.round(chartable.reduce(function(a, r) { return a + (r.metrics.views.total || 0); }, 0) / chartable.length);
+  var sorted = [].concat(chartable).sort(function(a, b) { return (b.metrics.views.total || 0) - (a.metrics.views.total || 0); });
+  var top = sorted[0];
+  var bottom = sorted[sorted.length - 1];
+
+  var prompt = 'You are a social media analytics expert for The Block, a crypto media publication. Analyze this podcast episode performance data for "' + showName + '":\n\n' +
+    epData + '\n\n' +
+    'Average: ' + avg.toLocaleString() + ' downloads. Top performer: "' + (top.epTitle || 'Unknown') + '" (' + (top.metrics.views.total || 0).toLocaleString() + '). Lowest: "' + (bottom.epTitle || 'Unknown') + '" (' + (bottom.metrics.views.total || 0).toLocaleString() + ').\n\n' +
+    'In 3-4 concise bullet points, give your honest assessment of: (1) what likely drove the top performer, (2) why the lower performers may have underperformed, (3) one actionable recommendation for future episodes. Be specific to crypto/finance media audiences. Keep it sharp and direct — no fluff.';
+
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+    });
+    var data = await resp.json();
+    var text = data.content && data.content[0] ? data.content[0].text : 'Could not generate insights.';
+    // Format bullet points nicely
+    var formatted = text.replace(/\n\n/g, '\n').split('\n').filter(Boolean).map(function(line) {
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--text2)">' + line + '</div>';
+    }).join('');
+    el.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px"><div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">AI Performance Analysis</div>' + formatted + '</div>';
+  } catch(e) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--red)">Could not generate insights: ' + e.message + '</div>';
   }
 }
 
@@ -568,13 +708,15 @@ async function fetchTransistor(r) {
     var u = new URL(r.url);
     var parts = u.pathname.split('/').filter(Boolean);
     var epSlug = null;
+    var showSlug = null;
 
     // share.transistor.fm/s/HASH
     if (parts[0] === 's' && parts[1]) epSlug = parts[1];
-    // dashboard.transistor.fm/shows/SHOW/episodes/EPISODE-SLUG/edit
-    // or transistor.fm/episodes/EPISODE-SLUG
+    // dashboard.transistor.fm/shows/SHOW-SLUG/episodes/EPISODE-SLUG/edit
     if (!epSlug) {
+      var showIdx = parts.indexOf('shows');
       var epIdx = parts.indexOf('episodes');
+      if (showIdx >= 0 && parts[showIdx + 1]) showSlug = parts[showIdx + 1];
       if (epIdx >= 0 && parts[epIdx + 1]) {
         epSlug = parts[epIdx + 1].replace('edit', '').replace(/\/$/, '');
       }
@@ -586,7 +728,9 @@ async function fetchTransistor(r) {
       return r;
     }
 
-    // Transistor accepts slug directly — no numeric ID lookup needed
+    // Format show name from slug (the-crypto-beat → The Crypto Beat)
+    var showName = showSlug ? showSlug.split('-').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ') : 'Transistor';
+
     // Date format must be dd-mm-yyyy
     var now = new Date();
     var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
@@ -594,20 +738,25 @@ async function fetchTransistor(r) {
     var past = new Date(Date.now() - 30 * 86400000);
     var startDate = pad(past.getDate()) + '-' + pad(past.getMonth() + 1) + '-' + past.getFullYear();
 
-    var resp = await fetch(settings.proxyUrl + '/transistor/analytics/episodes/' + epSlug + '?start_date=' + startDate + '&end_date=' + endDate);
+    // Fetch analytics + episode title in parallel
+    var analyticsUrl = settings.proxyUrl + '/transistor/analytics/episodes/' + epSlug + '?start_date=' + startDate + '&end_date=' + endDate + '&include[]=episode&fields[episode][]=title';
+    var resp = await fetch(analyticsUrl);
     if (!resp.ok) { var e = await resp.json(); r.status = 'error'; r.error = e.error || 'Transistor error ' + resp.status; return r; }
     var data = await resp.json();
 
-    // Downloads is an array of {date, downloads} — sum them all
+    // Sum downloads array
     var dlArray = data.data && data.data.attributes ? data.data.attributes.downloads || [] : [];
     var total = 0;
     for (var i = 0; i < dlArray.length; i++) { total += dlArray[i].downloads || 0; }
 
     // Get episode title from included
-    var epTitle = '';
+    var epTitle = epSlug.split('-').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
     var included = data.included || [];
-    if (included.length > 0 && included[0].attributes) epTitle = included[0].attributes.title || '';
+    if (included.length > 0 && included[0].attributes && included[0].attributes.title) {
+      epTitle = included[0].attributes.title;
+    }
 
+    r.showName = showName;
     r.epTitle = epTitle;
     r.status = 'success';
     r.metrics = {
@@ -795,6 +944,33 @@ function exportCSV() {
 loadSettings();
 refreshAll();
 renderHistory();
+
+// Auto-format pasted URLs in batch textarea
+document.getElementById('batch-urls').addEventListener('paste', function(e) {
+  e.preventDefault();
+  var text = (e.clipboardData || window.clipboardData).getData('text');
+  // Split by newlines first
+  var lines = text.split(/[\r\n]+/).map(function(l) { return l.trim(); }).filter(Boolean);
+  // If only one line but has multiple URLs, split on http
+  if (lines.length === 1 && (lines[0].match(/https?:\/\//g) || []).length > 1) {
+    lines = lines[0].split(/(?=https?:\/\/)/).map(function(l) { return l.trim(); }).filter(Boolean);
+  }
+  var current = this.value.trimEnd();
+  var newVal = current ? current + '\n' + lines.join('\n') : lines.join('\n');
+  this.value = newVal + '\n';
+  this.scrollTop = this.scrollHeight;
+  // Move cursor to end
+  this.selectionStart = this.selectionEnd = this.value.length;
+});
+
+// Also allow Enter key to just add a new line naturally (textarea default behavior is fine,
+// but make sure the form doesn't accidentally submit)
+document.getElementById('batch-urls').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    // Let the default textarea behavior handle it (adds newline without needing Shift)
+    e.stopPropagation();
+  }
+});
 </script>
 </body>
 </html>
