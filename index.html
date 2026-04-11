@@ -892,10 +892,41 @@ async function fetchSprout(r) {
     var data = await resp.json();
     var posts = data.data || [];
 
-    // Match by perma_link — normalize both sides
+    // Extract the core ID from the URL for matching
+    // Works for youtube.com/watch?v=ID, youtube.com/shorts/ID,
+    // twitter.com/status/ID, instagram.com/p/ID, linkedin posts, etc.
+    function extractId(url) {
+      try {
+        var u = new URL(url);
+        var parts = u.pathname.split('/').filter(Boolean);
+        // YouTube: watch?v=ID or shorts/ID or /v/ID
+        if (u.hostname.indexOf('youtube') >= 0 || u.hostname.indexOf('youtu.be') >= 0) {
+          return u.searchParams.get('v') || parts[parts.length - 1] || '';
+        }
+        // Twitter/X: /status/ID
+        if (u.hostname.indexOf('twitter') >= 0 || u.hostname.indexOf('x.com') >= 0) {
+          var si = parts.indexOf('status');
+          return si >= 0 ? parts[si + 1] : parts[parts.length - 1];
+        }
+        // Instagram: /p/ID/
+        if (u.hostname.indexOf('instagram') >= 0) {
+          var pi = parts.indexOf('p');
+          return pi >= 0 ? parts[pi + 1] : parts[parts.length - 1];
+        }
+        // Default: last path segment
+        return parts[parts.length - 1] || '';
+      } catch(e) { return ''; }
+    }
+
+    var targetId = extractId(r.url);
     var normalize = function(u) { return (u || '').split('?')[0].replace(/\/$/, '').toLowerCase(); };
     var urlNorm = normalize(r.url);
+
     var match = posts.find(function(p) {
+      if (!p.perma_link) return false;
+      // First try ID-based match (most reliable)
+      if (targetId && targetId.length > 4 && p.perma_link.indexOf(targetId) >= 0) return true;
+      // Fall back to normalized URL match
       var pl = normalize(p.perma_link);
       return pl === urlNorm || pl.indexOf(urlNorm) >= 0 || urlNorm.indexOf(pl) >= 0;
     });
