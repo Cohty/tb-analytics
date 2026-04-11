@@ -838,42 +838,30 @@ async function fetchTransistor(r) {
 
 async function fetchSprout(r) {
   try {
-    // Step 1: Get profile IDs from Sprout (required for the posts filter)
-    var profResp = await fetch(settings.proxyUrl + '/sprout/metadata/customer');
-    if (!profResp.ok) {
-      r.status = 'error';
-      r.error = 'Could not fetch Sprout profiles: ' + profResp.status;
-      return r;
-    }
-    var profData = await profResp.json();
-    var profiles = profData.data || [];
+    // Hardcoded profile IDs from The Block's Sprout account
+    var PROFILES = {
+      twitter:   [7399621, 7399638, 7399759], // TheBlockCo, TheBlockPods, TheBlockCampus
+      youtube:   [7399624],
+      linkedin:  [7399622],
+      instagram: [7399629],
+    };
 
-    // Filter profiles by platform network type
-    var networkMap = { twitter: 'twitter', youtube: 'youtube', linkedin: 'linkedin', instagram: 'instagram' };
-    var targetNetwork = networkMap[r.platform] || r.platform;
-    var matchedProfiles = profiles.filter(function(p) {
-      return p.network_type && p.network_type.toLowerCase().indexOf(targetNetwork) >= 0;
-    });
-
-    // Fall back to all profiles if none match the specific network
-    var profileIds = (matchedProfiles.length > 0 ? matchedProfiles : profiles).map(function(p) {
-      return p.customer_profile_id;
-    });
-
+    var profileIds = PROFILES[r.platform] || [];
     if (!profileIds.length) {
       r.status = 'manual';
-      r.error = 'No profiles found in Sprout — check your account connection';
+      r.error = 'No profile ID configured for this platform';
       return r;
     }
 
-    // Step 2: Query post analytics with correct Sprout filter syntax
-    var end = new Date().toISOString().replace('Z', '').split('.')[0];
-    var start = new Date(Date.now() - 90 * 86400000).toISOString().replace('Z', '').split('.')[0];
+    // Date range — last 90 days
+    var now = new Date();
+    var past = new Date(Date.now() - 90 * 86400000);
+    var fmtISO = function(d) { return d.toISOString().split('.')[0]; };
 
     var body = {
       filters: [
         'customer_profile_id.eq(' + profileIds.join(', ') + ')',
-        'created_time.in(' + start + '..' + end + ')'
+        'created_time.in(' + fmtISO(past) + '..' + fmtISO(now) + ')'
       ],
       fields: ['perma_link', 'text', 'created_time'],
       metrics: [
@@ -897,41 +885,46 @@ async function fetchSprout(r) {
     if (!resp.ok) {
       var e = await resp.json();
       r.status = 'error';
-      r.error = (e.error || 'Sprout error ' + resp.status);
+      r.error = e.error || 'Sprout error ' + resp.status;
       return r;
     }
 
     var data = await resp.json();
     var posts = data.data || [];
 
-    // Match post by perma_link
-    var urlClean = r.url.split('?')[0].replace(/\/$/, '');
+    // Match by perma_link — normalize both sides
+    var normalize = function(u) { return (u || '').split('?')[0].replace(/\/$/, '').toLowerCase(); };
+    var urlNorm = normalize(r.url);
     var match = posts.find(function(p) {
-      if (!p.perma_link) return false;
-      var pl = p.perma_link.split('?')[0].replace(/\/$/, '');
-      return pl === urlClean || urlClean.indexOf(pl) >= 0 || pl.indexOf(urlClean) >= 0;
+      var pl = normalize(p.perma_link);
+      return pl === urlNorm || pl.indexOf(urlNorm) >= 0 || urlNorm.indexOf(pl) >= 0;
     });
 
     if (match) {
       var m = match.metrics || {};
       var views = m['lifetime.video_views'] || 0;
-      var imps = m['lifetime.impressions'] || 0;
-      var engs = m['lifetime.engagements'] || 0;
+      var imps  = m['lifetime.impressions'] || 0;
+      var engs  = m['lifetime.engagements'] || 0;
       var likes = m['lifetime.likes'] || 0;
       var shares = m['lifetime.shares_count'] || 0;
       var comments = m['lifetime.comments'] || 0;
       r.status = 'success';
       r.metrics = {
-        views: { total: views, label: PC[r.platform].vl, breakdown: [Number(views).toLocaleString() + ' video views'] },
-        impressions: { total: imps, label: 'Impressions', breakdown: [Number(imps).toLocaleString() + ' impressions'] },
-        engagements: { total: engs, label: 'Engagements', breakdown: [Number(likes).toLocaleString() + ' likes', Number(shares).toLocaleString() + ' shares', Number(comments).toLocaleString() + ' comments'] },
+        views:       { total: views,  label: PC[r.platform].vl,  breakdown: [Number(views).toLocaleString() + ' video views'] },
+        impressions: { total: imps,   label: 'Impressions',       breakdown: [Number(imps).toLocaleString() + ' impressions'] },
+        engagements: { total: engs,   label: 'Engagements',       breakdown: [Number(likes).toLocaleString() + ' likes', Number(shares).toLocaleString() + ' shares', Number(comments).toLocaleString() + ' comments'] },
       };
     } else {
+      // Post not found — show how many posts we scanned so user knows it's working
       r.status = 'manual';
-      r.error = 'Post not found in Sprout results — it may be older than 90 days or not published through Sprout';
+      r.error = 'Post not found in Sprout (scanned ' + posts.length + ' posts from last 90 days). Post may have been published natively rather than through Sprout, or is older than 90 days.';
     }
     return r;
-  } catch(e) { r.status = 'error'; r.error = e.message; return r; }
+  } catch(e) {
+    r.status = 'error';
+    r.error = e.message;
+    return r;
+  }
 }
 
 async function callAI(prompt) {
