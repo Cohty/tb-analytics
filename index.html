@@ -136,6 +136,16 @@
   .plat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   .plat-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); }
 
+  /* SHOWS */
+  .show-btn.active-show { border-color: var(--accent); color: var(--accent); }
+  .range-btn.active-range { background: var(--accent-dim); border-color: rgba(212,240,60,0.4); color: var(--accent); }
+  .ep-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+  .ep-row:last-child { border-bottom: none; }
+  .ep-row:hover { background: var(--bg3); }
+  .ep-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+  .ep-title { font-size: 12px; color: var(--text2); flex: 1; }
+  .ep-date { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+
   @media (max-width: 600px) {
     .mgrid { grid-template-columns: 1fr; }
     .mgrid3 { grid-template-columns: 1fr; }
@@ -168,6 +178,7 @@
   <div class="tabs">
     <button class="tab active" id="tab-analyze" onclick="switchTab('analyze')">Analyze</button>
     <button class="tab" id="tab-batch" onclick="switchTab('batch')">Batch</button>
+    <button class="tab" id="tab-shows" onclick="switchTab('shows')">Shows</button>
     <button class="tab" id="tab-history" onclick="switchTab('history')">History</button>
     <button class="tab" id="tab-tags" onclick="switchTab('tags')">Tags & Groups</button>
     <button class="tab" id="tab-settings" onclick="switchTab('settings')">Settings</button>
@@ -310,6 +321,63 @@
           <div class="plat-row"><div class="pdot" style="background:#7c3aed"></div>Transistor.fm — direct proxy</div>
           <div class="plat-row"><div class="pdot" style="background:#555"></div>TikTok, Twitch — manual entry</div>
         </div>
+      </div>
+    </div>
+
+    <!-- SHOWS -->
+    <div class="panel" id="panel-shows">
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <button class="show-btn btn" id="show-btn-the-crypto-beat" onclick="loadShow('the-crypto-beat','The Crypto Beat')">The Crypto Beat</button>
+        <button class="show-btn btn" id="show-btn-layer-one" onclick="loadShow('layer-one','Layer One')">Layer One</button>
+        <button class="show-btn btn" id="show-btn-the-big-brain-podcast" onclick="loadShow('the-big-brain-podcast','The Big Brain Podcast')">The Big Brain Podcast</button>
+      </div>
+
+      <div id="shows-loading" style="display:none;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;padding:8px 0">Loading episodes...</div>
+
+      <div id="shows-controls" style="display:none">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div class="slabel" style="margin:0">Date range</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="range-btns">
+            <button class="range-btn btn btn-sm active-range" onclick="setRange(7)" data-days="7">7 days</button>
+            <button class="range-btn btn btn-sm" onclick="setRange(30)" data-days="30">30 days</button>
+            <button class="range-btn btn btn-sm" onclick="setRange(90)" data-days="90">3 months</button>
+            <button class="range-btn btn btn-sm" onclick="setRange(180)" data-days="180">6 months</button>
+            <button class="range-btn btn btn-sm" onclick="setRange(365)" data-days="365">1 year</button>
+            <button class="range-btn btn btn-sm" onclick="setRange(0)" data-days="0">Custom</button>
+          </div>
+          <div id="custom-range" style="display:none;display:flex;gap:6px;align-items:center">
+            <input type="date" id="custom-start" style="width:140px;background:var(--bg3)">
+            <span style="color:var(--text3);font-size:12px">to</span>
+            <input type="date" id="custom-end" style="width:140px;background:var(--bg3)">
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-sm" onclick="selectAllEps(true)">Select all</button>
+            <button class="btn btn-sm" onclick="selectAllEps(false)">Deselect all</button>
+            <span id="ep-count" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace"></span>
+          </div>
+          <button class="btn btn-accent" onclick="analyzeShow()">Analyze selected</button>
+        </div>
+
+        <div id="ep-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px"></div>
+      </div>
+
+      <div id="shows-out"></div>
+
+      <div id="shows-chart-section" style="display:none;margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:13px;font-weight:500" id="shows-chart-title">Episode comparison</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="shows-chart-type-btn" onclick="toggleShowsChartType()">Switch to line</button>
+            <button class="btn btn-accent btn-sm" onclick="generateShowInsights()">AI insights</button>
+          </div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px">
+          <canvas id="shows-chart" style="max-height:360px"></canvas>
+        </div>
+        <div id="shows-insights-out" style="margin-top:16px"></div>
       </div>
     </div>
 
@@ -939,6 +1007,271 @@ function exportCSV() {
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'theblock-analytics-' + new Date().toISOString().split('T')[0] + '.csv';
   a.click();
+}
+
+// ── SHOWS ──────────────────────────────────────────────────────────────
+var currentShow = null;
+var allEpisodes = [];
+var showsChartType = 'bar';
+var showsChart = null;
+var showsResults = [];
+var selectedDays = 7;
+
+function loadShow(slug, name) {
+  currentShow = { slug: slug, name: name };
+  document.querySelectorAll('.show-btn').forEach(function(b) { b.classList.remove('active-show'); });
+  document.getElementById('show-btn-' + slug).classList.add('active-show');
+  document.getElementById('shows-loading').style.display = 'block';
+  document.getElementById('shows-controls').style.display = 'none';
+  document.getElementById('shows-out').innerHTML = '';
+  document.getElementById('shows-chart-section').style.display = 'none';
+  document.getElementById('shows-insights-out').innerHTML = '';
+  allEpisodes = [];
+  fetchAllEpisodes(slug, name, 1);
+}
+
+async function fetchAllEpisodes(slug, name, page) {
+  try {
+    var resp = await fetch(settings.proxyUrl + '/transistor/episodes?show_id=' + slug + '&status=published&order=desc&pagination%5Bpage%5D=' + page + '&pagination%5Bper%5D=50');
+    if (!resp.ok) {
+      document.getElementById('shows-loading').innerHTML = '<span style="color:var(--red)">Error loading episodes: ' + resp.status + '</span>';
+      return;
+    }
+    var data = await resp.json();
+    var eps = data.data || [];
+    allEpisodes = allEpisodes.concat(eps);
+    var meta = data.meta || {};
+    var totalPages = meta.totalPages || 1;
+    if (page < totalPages) {
+      fetchAllEpisodes(slug, name, page + 1);
+      return;
+    }
+    document.getElementById('shows-loading').style.display = 'none';
+    document.getElementById('shows-controls').style.display = 'block';
+    renderEpList();
+    updateEpCount();
+  } catch(e) {
+    document.getElementById('shows-loading').innerHTML = '<span style="color:var(--red)">Failed to load: ' + e.message + '</span>';
+  }
+}
+
+function renderEpList() {
+  var el = document.getElementById('ep-list');
+  if (!allEpisodes.length) { el.innerHTML = '<div class="empty">No published episodes found</div>'; return; }
+  el.innerHTML = allEpisodes.map(function(ep, i) {
+    var attrs = ep.attributes || {};
+    var title = attrs.title || 'Episode ' + (i + 1);
+    var date = attrs.published_at ? new Date(attrs.published_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+    var duration = attrs.duration_in_mmss || '';
+    return '<div class="ep-row" onclick="toggleEp(' + i + ')">' +
+      '<input type="checkbox" id="ep-cb-' + i + '" checked onclick="event.stopPropagation();updateEpCount()">' +
+      '<div class="ep-title">' + title + '</div>' +
+      (duration ? '<span style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;flex-shrink:0">' + duration + '</span>' : '') +
+      '<div class="ep-date">' + date + '</div>' +
+      '</div>';
+  }).join('');
+  updateEpCount();
+}
+
+function toggleEp(i) {
+  var cb = document.getElementById('ep-cb-' + i);
+  cb.checked = !cb.checked;
+  updateEpCount();
+}
+
+function updateEpCount() {
+  var checked = document.querySelectorAll('#ep-list input[type=checkbox]:checked').length;
+  document.getElementById('ep-count').textContent = checked + ' of ' + allEpisodes.length + ' selected';
+}
+
+function selectAllEps(val) {
+  document.querySelectorAll('#ep-list input[type=checkbox]').forEach(function(cb) { cb.checked = val; });
+  updateEpCount();
+}
+
+function setRange(days) {
+  selectedDays = days;
+  document.querySelectorAll('.range-btn').forEach(function(b) { b.classList.remove('active-range'); });
+  var btn = document.querySelector('.range-btn[data-days="' + days + '"]');
+  if (btn) btn.classList.add('active-range');
+  var customDiv = document.getElementById('custom-range');
+  customDiv.style.display = days === 0 ? 'flex' : 'none';
+}
+
+function getDateRange() {
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  var fmt = function(d) { return pad(d.getDate()) + '-' + pad(d.getMonth() + 1) + '-' + d.getFullYear(); };
+  if (selectedDays === 0) {
+    var s = document.getElementById('custom-start').value;
+    var e = document.getElementById('custom-end').value;
+    if (!s || !e) return null;
+    var sd = new Date(s), ed = new Date(e);
+    return { start: fmt(sd), end: fmt(ed) };
+  }
+  var end = new Date();
+  var start = new Date(Date.now() - selectedDays * 86400000);
+  return { start: fmt(start), end: fmt(end) };
+}
+
+async function analyzeShow() {
+  var range = getDateRange();
+  if (!range) { alert('Please select a date range'); return; }
+  var checked = [];
+  document.querySelectorAll('#ep-list input[type=checkbox]').forEach(function(cb, i) {
+    if (cb.checked && allEpisodes[i]) checked.push(allEpisodes[i]);
+  });
+  if (!checked.length) { alert('Select at least one episode'); return; }
+
+  var out = document.getElementById('shows-out');
+  document.getElementById('shows-chart-section').style.display = 'none';
+  document.getElementById('shows-insights-out').innerHTML = '';
+  showsResults = [];
+
+  // Show loading placeholders
+  out.innerHTML = checked.map(function(ep) {
+    var title = (ep.attributes || {}).title || 'Episode';
+    return '<div class="rcard" id="sep-' + ep.id + '">' +
+      '<div class="rhead"><div class="plat"><div class="pdot" style="background:#7c3aed"></div>' +
+      '<span class="plat-name">' + currentShow.name + '</span>' +
+      '<span style="font-size:11px;color:var(--text3)"> — ' + title + '</span></div>' +
+      '<span class="sbadge s-load">fetching...</span></div>' +
+      '<div class="mgrid"><div class="mcard"><div class="mcard-label">Downloads</div><div class="mcard-val" style="color:var(--text3)">—</div></div>' +
+      '<div class="mcard"><div class="mcard-label">Impressions</div><div class="mcard-val" style="color:var(--text3)">N/A</div></div>' +
+      '<div class="mcard"><div class="mcard-label">Engagements</div><div class="mcard-val" style="color:var(--text3)">N/A</div></div></div></div>';
+  }).join('');
+
+  // Fetch analytics for each episode with rate limit buffer
+  for (var i = 0; i < checked.length; i++) {
+    var ep = checked[i];
+    var title = (ep.attributes || {}).title || 'Episode';
+    var epId = ep.id;
+    var result = { id: epId, title: title, showName: currentShow.name, downloads: 0, error: null };
+    try {
+      var url = settings.proxyUrl + '/transistor/analytics/episodes/' + epId + '?start_date=' + range.start + '&end_date=' + range.end;
+      var resp = await fetch(url);
+      var data = await resp.json();
+      if (resp.ok) {
+        var dlArr = data.data && data.data.attributes ? data.data.attributes.downloads || [] : [];
+        var total = 0;
+        for (var j = 0; j < dlArr.length; j++) total += dlArr[j].downloads || 0;
+        result.downloads = total;
+      } else {
+        result.error = data.error || 'Error ' + resp.status;
+      }
+    } catch(e) { result.error = e.message; }
+
+    showsResults.push(result);
+    var el = document.getElementById('sep-' + epId);
+    if (el) {
+      var dl = result.error ? '—' : Number(result.downloads).toLocaleString();
+      var valColor = result.error ? 'var(--text3)' : '#7c3aed';
+      var badge = result.error ? '<span class="sbadge s-err">error</span>' : '<span class="sbadge s-ok">fetched</span>';
+      el.innerHTML = '<div class="rhead"><div class="plat"><div class="pdot" style="background:#7c3aed"></div>' +
+        '<span class="plat-name">' + currentShow.name + '</span>' +
+        '<span style="font-size:11px;color:var(--text3)"> — ' + title + '</span></div>' + badge + '</div>' +
+        (result.error ? '<div style="font-size:12px;color:var(--red);margin-top:8px;font-family:\'DM Mono\',monospace">' + result.error + '</div>' :
+        '<div class="mgrid"><div class="mcard"><div class="mcard-label">Downloads</div><div class="mcard-val" style="color:' + valColor + '">' + dl + '</div><div class="mcard-break">' + range.start + ' → ' + range.end + '</div></div>' +
+        '<div class="mcard"><div class="mcard-label">Impressions</div><div class="mcard-val" style="color:var(--text3)">N/A</div><div class="mcard-break">Not tracked for podcasts</div></div>' +
+        '<div class="mcard"><div class="mcard-label">Engagements</div><div class="mcard-val" style="color:var(--text3)">N/A</div><div class="mcard-break">Not tracked for podcasts</div></div></div>');
+    }
+    // Small delay to avoid rate limiting (10 req/10s)
+    if (i < checked.length - 1) await new Promise(function(res) { setTimeout(res, 300); });
+  }
+
+  var successful = showsResults.filter(function(r) { return !r.error && r.downloads !== null; });
+  if (successful.length > 1) {
+    document.getElementById('shows-chart-section').style.display = 'block';
+    document.getElementById('shows-chart-title').textContent = currentShow.name + ' — episode comparison';
+    renderShowsChart(successful);
+  }
+}
+
+function renderShowsChart(results) {
+  var sorted = [].concat(results).reverse(); // oldest first for left-to-right timeline
+  var labels = sorted.map(function(r) {
+    return r.title.length > 35 ? r.title.substring(0, 33) + '…' : r.title;
+  });
+  var values = sorted.map(function(r) { return r.downloads || 0; });
+  var avg = values.reduce(function(a, b) { return a + b; }, 0) / values.length;
+  var colors = values.map(function(v) { return v >= avg ? 'rgba(124,58,237,0.8)' : 'rgba(124,58,237,0.3)'; });
+  var borders = values.map(function(v) { return v >= avg ? '#7c3aed' : 'rgba(124,58,237,0.5)'; });
+
+  var ctx = document.getElementById('shows-chart').getContext('2d');
+  if (showsChart) showsChart.destroy();
+  Chart.defaults.color = '#555';
+  Chart.defaults.font.family = 'DM Mono, monospace';
+  Chart.defaults.font.size = 11;
+
+  showsChart = new Chart(ctx, {
+    type: showsChartType,
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Downloads',
+        data: values,
+        backgroundColor: colors,
+        borderColor: borders,
+        borderWidth: 1,
+        borderRadius: showsChartType === 'bar' ? 4 : 0,
+        tension: 0.3,
+        fill: showsChartType === 'line',
+        pointBackgroundColor: borders,
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e1e1e', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          titleColor: '#7c3aed', bodyColor: '#888',
+          callbacks: { label: function(ctx) { return ' ' + ctx.parsed.y.toLocaleString() + ' downloads'; } }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555', maxRotation: 35, font: { size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#555', callback: function(v) { return v.toLocaleString(); } }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function toggleShowsChartType() {
+  showsChartType = showsChartType === 'bar' ? 'line' : 'bar';
+  document.getElementById('shows-chart-type-btn').textContent = showsChartType === 'bar' ? 'Switch to line' : 'Switch to bar';
+  var successful = showsResults.filter(function(r) { return !r.error; });
+  if (successful.length > 1) renderShowsChart(successful);
+}
+
+async function generateShowInsights() {
+  var el = document.getElementById('shows-insights-out');
+  var successful = showsResults.filter(function(r) { return !r.error && r.downloads > 0; });
+  if (!successful.length) return;
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3);font-family:\'DM Mono\',monospace;padding:14px 0">Analyzing performance patterns...</div>';
+
+  var avg = Math.round(successful.reduce(function(a, r) { return a + r.downloads; }, 0) / successful.length);
+  var sorted = [].concat(successful).sort(function(a, b) { return b.downloads - a.downloads; });
+  var top = sorted[0];
+  var bottom = sorted[sorted.length - 1];
+  var epData = successful.map(function(r) { return '"' + r.title + '": ' + r.downloads + ' downloads'; }).join('\n');
+
+  var prompt = 'You are a podcast analytics expert for The Block, a leading crypto media publication. Analyze this episode performance data for the "' + currentShow.name + '" podcast:\n\n' + epData + '\n\nAverage: ' + avg.toLocaleString() + ' downloads. Top: "' + top.title + '" (' + top.downloads.toLocaleString() + '). Lowest: "' + bottom.title + '" (' + bottom.downloads.toLocaleString() + ').\n\nGive 4 sharp bullet points: (1) what made the top episode work — topic, timing, or guest, (2) patterns you see in the lower performers, (3) what topics or formats The Block audience responds to based on this data, (4) one specific actionable recommendation. Be direct and crypto/finance media specific. No fluff.';
+
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    var data = await resp.json();
+    var text = data.content && data.content[0] ? data.content[0].text : 'Could not generate insights.';
+    var formatted = text.split('\n').filter(Boolean).map(function(line) {
+      return '<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;line-height:1.65;color:var(--text2)">' + line + '</div>';
+    }).join('');
+    el.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px"><div style="font-size:10px;font-family:\'DM Mono\',monospace;color:#7c3aed;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">AI Performance Analysis — ' + currentShow.name + '</div>' + formatted + '</div>';
+  } catch(e) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--red)">Could not generate insights: ' + e.message + '</div>';
+  }
 }
 
 loadSettings();
