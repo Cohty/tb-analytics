@@ -417,7 +417,11 @@ var PC = {
 
 function detectPlat(url) {
   try {
-    var u = new URL(url), h = u.hostname.replace('www.', '');
+    // Ensure URL has a protocol
+    var fullUrl = url.trim();
+    if (fullUrl.indexOf('http') !== 0) fullUrl = 'https://' + fullUrl;
+    var u = new URL(fullUrl);
+    var h = u.hostname.toLowerCase().replace('www.', '');
     if (h === 'twitter.com' || h === 'x.com') return 'twitter';
     if (h === 'youtube.com' || h === 'youtu.be') return 'youtube';
     if (h === 'linkedin.com' || h === 'lnkd.in') return 'linkedin';
@@ -425,7 +429,7 @@ function detectPlat(url) {
     if (h === 'tiktok.com') return 'tiktok';
     if (h === 'twitch.tv') return 'twitch';
     if (h === 'transistor.fm' || h === 'share.transistor.fm' || h === 'dashboard.transistor.fm') return 'transistor';
-    if (h.includes('theblock')) return 'theblock';
+    if (h.indexOf('theblock') >= 0) return 'theblock';
     return 'unknown';
   } catch(e) { return 'unknown'; }
 }
@@ -777,13 +781,19 @@ async function fetchYouTube(r) {
     // Extract video ID from any YouTube URL format
     var videoId = null;
     try {
-      var u = new URL(r.url);
+      var fullUrl = r.url.trim();
+      if (fullUrl.indexOf('http') !== 0) fullUrl = 'https://' + fullUrl;
+      var u = new URL(fullUrl);
       // youtube.com/watch?v=ID
       videoId = u.searchParams.get('v');
       // youtube.com/shorts/ID or youtu.be/ID
       if (!videoId) {
         var parts = u.pathname.split('/').filter(Boolean);
-        videoId = parts[parts.length - 1];
+        // filter out 'shorts' segment
+        var filtered = parts.filter(function(p) { return p !== 'shorts'; });
+        videoId = filtered[filtered.length - 1] || null;
+        // strip any query-like suffixes
+        if (videoId && videoId.indexOf('?') >= 0) videoId = videoId.split('?')[0];
       }
     } catch(e) {}
 
