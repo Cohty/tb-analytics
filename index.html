@@ -766,9 +766,72 @@ async function fetchMetrics(r) {
   var pl = detectPlat(r.url);
   r.platform = pl; r.platformLabel = (PC[pl] || PC.unknown).label;
   if (pl === 'transistor') return await fetchTransistor(r);
-  if (pl === 'twitter' || pl === 'youtube' || pl === 'linkedin' || pl === 'instagram') return await fetchSprout(r);
+  if (pl === 'youtube') return await fetchYouTube(r);
+  if (pl === 'twitter' || pl === 'linkedin' || pl === 'instagram') return await fetchSprout(r);
   r.status = 'manual'; r.error = 'No API integration for this platform — enter manually';
   return r;
+}
+
+async function fetchYouTube(r) {
+  try {
+    // Extract video ID from any YouTube URL format
+    var videoId = null;
+    try {
+      var u = new URL(r.url);
+      // youtube.com/watch?v=ID
+      videoId = u.searchParams.get('v');
+      // youtube.com/shorts/ID or youtu.be/ID
+      if (!videoId) {
+        var parts = u.pathname.split('/').filter(Boolean);
+        videoId = parts[parts.length - 1];
+      }
+    } catch(e) {}
+
+    if (!videoId) {
+      r.status = 'manual';
+      r.error = 'Could not extract video ID from URL';
+      return r;
+    }
+
+    // Fetch video stats — views, likes, comments
+    var statsResp = await fetch(settings.proxyUrl + '/youtube/videos?part=statistics,snippet&id=' + videoId);
+    if (!statsResp.ok) {
+      var e = await statsResp.json();
+      r.status = 'error';
+      r.error = e.error && e.error.message ? e.error.message : 'YouTube API error ' + statsResp.status;
+      return r;
+    }
+    var statsData = await statsResp.json();
+    var items = statsData.items || [];
+    if (!items.length) {
+      r.status = 'error';
+      r.error = 'Video not found — check the URL or make sure the video is public';
+      return r;
+    }
+
+    var item = items[0];
+    var stats = item.statistics || {};
+    var snippet = item.snippet || {};
+    var views = parseInt(stats.viewCount || 0);
+    var likes = parseInt(stats.likeCount || 0);
+    var comments = parseInt(stats.commentCount || 0);
+    var title = snippet.title || '';
+    var publishedAt = snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+
+    r.epTitle = title;
+    r.showName = 'YouTube';
+    r.status = 'success';
+    r.metrics = {
+      views: { total: views, label: 'Views', breakdown: [Number(views).toLocaleString() + ' total views', publishedAt ? 'Published ' + publishedAt : ''] },
+      impressions: { total: null, label: 'Impressions', breakdown: ['Not available via YouTube API'] },
+      engagements: { total: likes + comments, label: 'Engagements', breakdown: [Number(likes).toLocaleString() + ' likes', Number(comments).toLocaleString() + ' comments'] },
+    };
+    return r;
+  } catch(e) {
+    r.status = 'error';
+    r.error = e.message;
+    return r;
+  }
 }
 
 async function fetchTransistor(r) {
