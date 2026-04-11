@@ -312,6 +312,20 @@
           <span id="saved-msg" style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;display:none">Saved.</span>
         </div>
         <div class="divider"></div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:12px">Connected accounts</div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 18px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <div style="font-size:13px;font-weight:500;margin-bottom:3px">Google / YouTube Analytics</div>
+              <div id="google-status" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">Not connected — impressions unavailable</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-accent btn-sm" id="google-connect-btn" onclick="connectGoogle()">Connect Google</button>
+              <button class="btn btn-sm" id="google-disconnect-btn" onclick="disconnectGoogle()" style="display:none">Disconnect</button>
+            </div>
+          </div>
+        </div>
+        <div class="divider"></div>
         <div class="slabel">Platform support</div>
         <div class="plat-grid">
           <div class="plat-row"><div class="pdot" style="background:#1d9bf0"></div>Twitter / X — Sprout proxy</div>
@@ -386,6 +400,12 @@
 
 <script>
 var settings = JSON.parse(localStorage.getItem('tb_s3') || '{}');
+// Always ensure proxy URL is set — hardcoded as default
+if (!settings.proxyUrl) {
+  settings.proxyUrl = 'https://summer-grass-090c.remitmap.workers.dev';
+  localStorage.setItem('tb_s3', JSON.stringify(settings));
+}
+var googleAuth = JSON.parse(localStorage.getItem('tb_google_auth') || 'null');
 var tags = JSON.parse(localStorage.getItem('tb_t') || '[]');
 var groups = JSON.parse(localStorage.getItem('tb_g') || '[]');
 var hist = JSON.parse(localStorage.getItem('tb_h3') || '[]');
@@ -784,15 +804,11 @@ async function fetchYouTube(r) {
       var fullUrl = r.url.trim();
       if (fullUrl.indexOf('http') !== 0) fullUrl = 'https://' + fullUrl;
       var u = new URL(fullUrl);
-      // youtube.com/watch?v=ID
       videoId = u.searchParams.get('v');
-      // youtube.com/shorts/ID or youtu.be/ID
       if (!videoId) {
         var parts = u.pathname.split('/').filter(Boolean);
-        // filter out 'shorts' segment
         var filtered = parts.filter(function(p) { return p !== 'shorts'; });
         videoId = filtered[filtered.length - 1] || null;
-        // strip any query-like suffixes
         if (videoId && videoId.indexOf('?') >= 0) videoId = videoId.split('?')[0];
       }
     } catch(e) {}
@@ -803,7 +819,7 @@ async function fetchYouTube(r) {
       return r;
     }
 
-    // Fetch video stats — views, likes, comments
+    // Fetch public stats — views, likes, comments
     var statsResp = await fetch(settings.proxyUrl + '/youtube/videos?part=statistics,snippet&id=' + videoId);
     if (!statsResp.ok) {
       var e = await statsResp.json();
@@ -826,15 +842,64 @@ async function fetchYouTube(r) {
     var likes = parseInt(stats.likeCount || 0);
     var comments = parseInt(stats.commentCount || 0);
     var title = snippet.title || '';
-    var publishedAt = snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+    var publishedAt = snippet.publishedAt ? snippet.publishedAt.split('T')[0] : '';
+    var publishedFmt = publishedAt ? new Date(publishedAt + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+
+    // Try to fetch impressions from YouTube Analytics API if connected
+    var impressions = null;
+    var ctr = null;
+    var watchTime = null;
+    var token = await getGoogleToken();
+    if (token && publishedAt) {
+      try {
+        var endDate = new Date().toISOString().split('T')[0];
+        var analyticsUrl = '/reports?ids=channel==MINE&startDate=' + publishedAt + '&endDate=' + endDate +
+          '&metrics=impressions,impressionsClickThroughRate,estimatedMinutesWatched' +
+          '&filters=video==' + videoId + '&dimensions=video';
+        var aResp = await fetch(settings.proxyUrl + '/yt-analytics/' + analyticsUrl, {
+          headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (aResp.ok) {
+          var aData = await aResp.json();
+          var rows = aData.rows || [];
+          if (rows.length > 0) {
+            var cols = aData.columnHeaders || [];
+            var impIdx = cols.findIndex(function(c) { return c.name === 'impressions'; });
+            var ctrIdx = cols.findIndex(function(c) { return c.name === 'impressionsClickThroughRate'; });
+            var wtIdx  = cols.findIndex(function(c) { return c.name === 'estimatedMinutesWatched'; });
+            if (impIdx >= 0) impressions = Math.round(rows[0][impIdx]);
+            if (ctrIdx >= 0) ctr = (rows[0][ctrIdx] * 100).toFixed(1) + '%';
+            if (wtIdx  >= 0) watchTime = Math.round(rows[0][wtIdx]).toLocaleString() + ' min';
+          }
+        }
+      } catch(e) {}
+    }
 
     r.epTitle = title;
     r.showName = 'YouTube';
     r.status = 'success';
     r.metrics = {
-      views: { total: views, label: 'Views', breakdown: [Number(views).toLocaleString() + ' total views', publishedAt ? 'Published ' + publishedAt : ''] },
-      impressions: { total: null, label: 'Impressions', breakdown: ['Not available via YouTube API'] },
-      engagements: { total: likes + comments, label: 'Engagements', breakdown: [Number(likes).toLocaleString() + ' likes', Number(comments).toLocaleString() + ' comments'] },
+      views: {
+        total: views,
+        label: 'Views',
+        breakdown: [
+          Number(views).toLocaleString() + ' total views',
+          publishedFmt ? 'Published ' + publishedFmt : '',
+          watchTime ? 'Watch time: ' + watchTime : ''
+        ].filter(Boolean)
+      },
+      impressions: {
+        total: impressions,
+        label: 'Impressions',
+        breakdown: impressions !== null
+          ? [Number(impressions).toLocaleString() + ' impressions', ctr ? 'CTR: ' + ctr : '']
+          : [token ? 'No impression data for this video' : 'Connect Google in Settings for impressions']
+      },
+      engagements: {
+        total: likes + comments,
+        label: 'Engagements',
+        breakdown: [Number(likes).toLocaleString() + ' likes', Number(comments).toLocaleString() + ' comments']
+      },
     };
     return r;
   } catch(e) {
@@ -1106,7 +1171,70 @@ function exportCSV() {
   a.click();
 }
 
-// ── SHOWS ──────────────────────────────────────────────────────────────
+// ── GOOGLE AUTH ────────────────────────────────────────────────────────
+function connectGoogle() {
+  var popup = window.open(settings.proxyUrl + '/auth/google', 'google_auth', 'width=500,height=600,scrollbars=yes');
+  window.addEventListener('message', function handler(e) {
+    if (e.data && e.data.type === 'google_auth_success') {
+      googleAuth = {
+        access_token: e.data.access_token,
+        refresh_token: e.data.refresh_token,
+        expires_at: Date.now() + (e.data.expires_in * 1000)
+      };
+      localStorage.setItem('tb_google_auth', JSON.stringify(googleAuth));
+      updateGoogleStatus();
+      window.removeEventListener('message', handler);
+    } else if (e.data && e.data.type === 'google_auth_error') {
+      alert('Google auth error: ' + e.data.error);
+      window.removeEventListener('message', handler);
+    }
+  });
+}
+
+function disconnectGoogle() {
+  googleAuth = null;
+  localStorage.removeItem('tb_google_auth');
+  updateGoogleStatus();
+}
+
+function updateGoogleStatus() {
+  var statusEl = document.getElementById('google-status');
+  var connectBtn = document.getElementById('google-connect-btn');
+  var disconnectBtn = document.getElementById('google-disconnect-btn');
+  if (!statusEl) return;
+  if (googleAuth && googleAuth.access_token) {
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = 'Connected — impressions, CTR and watch time available';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = 'inline-flex';
+  } else {
+    statusEl.style.color = 'var(--text3)';
+    statusEl.textContent = 'Not connected — impressions unavailable';
+    connectBtn.style.display = 'inline-flex';
+    disconnectBtn.style.display = 'none';
+  }
+}
+
+async function getGoogleToken() {
+  if (!googleAuth) return null;
+  // Refresh if expired or expiring in next 5 minutes
+  if (Date.now() > googleAuth.expires_at - 300000) {
+    try {
+      var resp = await fetch(settings.proxyUrl + '/auth/google/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({refresh_token: googleAuth.refresh_token})
+      });
+      var data = await resp.json();
+      if (data.access_token) {
+        googleAuth.access_token = data.access_token;
+        googleAuth.expires_at = Date.now() + (data.expires_in * 1000);
+        localStorage.setItem('tb_google_auth', JSON.stringify(googleAuth));
+      }
+    } catch(e) { return null; }
+  }
+  return googleAuth.access_token;
+}
 var currentShow = null;
 var allEpisodes = [];
 var showsChartType = 'bar';
@@ -1374,6 +1502,7 @@ async function generateShowInsights() {
 loadSettings();
 refreshAll();
 renderHistory();
+updateGoogleStatus();
 
 // Auto-format pasted URLs in batch textarea
 document.getElementById('batch-urls').addEventListener('paste', function(e) {
