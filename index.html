@@ -386,6 +386,11 @@
 
 <script>
 var settings = JSON.parse(localStorage.getItem('tb_s3') || '{}');
+// Always ensure proxy URL is set — hardcoded as default
+if (!settings.proxyUrl) {
+  settings.proxyUrl = 'https://summer-grass-090c.remitmap.workers.dev';
+  localStorage.setItem('tb_s3', JSON.stringify(settings));
+}
 var tags = JSON.parse(localStorage.getItem('tb_t') || '[]');
 var groups = JSON.parse(localStorage.getItem('tb_g') || '[]');
 var hist = JSON.parse(localStorage.getItem('tb_h3') || '[]');
